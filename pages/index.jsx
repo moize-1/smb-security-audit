@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * SMB Security Copilot – ChatGPT-like UI (Pure JS + styled-jsx)
- * - No TypeScript, no Tailwind. Single file.
- * - Dark theme, chat bubbles, typing indicator, sticky composer.
- * - SubId passthrough + basic dataLayer events.
+ *
+ * Single-question flow: shows ONE question at a time. On select → auto-advance
+ * to the next question. Includes Back button, progress, typing indicator,
+ * sticky composer, and a final plan with affiliate options.
  */
 
 // ---------- helpers ----------
@@ -73,105 +74,37 @@ function computePlan(a) {
 
   if (a.mfa !== "All users") {
     risk += 3;
-    steps.push({
-      id: "mfa",
-      title: "Enforce MFA for all accounts",
-      why: "Stops most account-takeover attacks.",
-      how: [
-        a.suite === "Microsoft 365"
-          ? "Use Conditional Access in Entra ID to require MFA for all users."
-          : a.suite === "Google Workspace"
-          ? "Turn on 2-Step Verification for all users in Admin console."
-          : "Use Duo to enforce MFA across various apps."
-      ],
-      category: "mfa",
-      impact: 5,
-      effort: "Low"
-    });
+    steps.push({ id: "mfa", title: "Enforce MFA for all accounts", why: "Stops most account-takeover attacks.", how: [
+      a.suite === "Microsoft 365" ? "Use Conditional Access in Entra ID to require MFA for all users." :
+      a.suite === "Google Workspace" ? "Turn on 2-Step Verification for all users in Admin console." :
+      "Use Duo to enforce MFA across various apps."], category: "mfa", impact: 5, effort: "Low" });
   }
-
   if (a.pwdmgr !== "Yes") {
     risk += 2;
-    steps.push({
-      id: "pwdmgr",
-      title: "Adopt a team password manager",
-      why: "Reduces weak/reused passwords and enables secure sharing.",
-      how: ["Create shared vaults; require strong, unique passwords; enable SSO if available."],
-      category: "passwordManager",
-      impact: 4,
-      effort: "Low"
-    });
+    steps.push({ id: "pwdmgr", title: "Adopt a team password manager", why: "Reduces weak/reused passwords and enables secure sharing.", how: ["Create shared vaults; require strong, unique passwords; enable SSO if available."], category: "passwordManager", impact: 4, effort: "Low" });
   }
-
   if (a.endpoint !== "All devices") {
     risk += 2;
-    steps.push({
-      id: "endpoint",
-      title: "Deploy endpoint protection on all devices",
-      why: "Blocks malware/ransomware before it spreads.",
-      how: ["Roll out a single EDR/AV to all endpoints and monitor alerts weekly."],
-      category: "endpoint",
-      impact: 4,
-      effort: a.endpoint === "No" ? "Medium" : "Low"
-    });
+    steps.push({ id: "endpoint", title: "Deploy endpoint protection on all devices", why: "Blocks malware/ransomware before it spreads.", how: ["Roll out a single EDR/AV to all endpoints and monitor alerts weekly."], category: "endpoint", impact: 4, effort: a.endpoint === "No" ? "Medium" : "Low" });
   }
-
   if (a.backup !== "Yes") {
     risk += 3;
-    steps.push({
-      id: "backup",
-      title: "Enable automated, offsite backups",
-      why: "Protects from ransomware, device loss, and accidental deletion.",
-      how: ["Back up laptops/desktops daily and test restores quarterly."],
-      category: "backup",
-      impact: 5,
-      effort: "Medium"
-    });
+    steps.push({ id: "backup", title: "Enable automated, offsite backups", why: "Protects from ransomware, device loss, and accidental deletion.", how: ["Back up laptops/desktops daily and test restores quarterly."], category: "backup", impact: 5, effort: "Medium" });
   }
-
   if (a.emailsec !== "Yes") {
     risk += 1;
-    steps.push({
-      id: "email",
-      title: "Add advanced email security",
-      why: "Catches phishing and malicious attachments that defaults miss.",
-      how: [
-        a.suite === "Microsoft 365"
-          ? "Add advanced phishing protection on top of Defender (or third-party gateway)."
-          : a.suite === "Google Workspace"
-          ? "Layer a secure email gateway to improve phishing detection."
-          : "Add a secure email gateway to your mail provider."
-      ],
-      category: "emailSecurity",
-      impact: 3,
-      effort: "Low"
-    });
+    steps.push({ id: "email", title: "Add advanced email security", why: "Catches phishing and malicious attachments that defaults miss.", how: [
+      a.suite === "Microsoft 365" ? "Add advanced phishing protection on top of Defender (or third-party gateway)." :
+      a.suite === "Google Workspace" ? "Layer a secure email gateway to improve phishing detection." :
+      "Add a secure email gateway to your mail provider."], category: "emailSecurity", impact: 3, effort: "Low" });
   }
-
   if (["Some", "Many/Most"].includes(a.remote)) {
     risk += 1;
-    steps.push({
-      id: "vpn",
-      title: "Provide secure remote access (VPN/ZTNA)",
-      why: "Encrypts traffic on untrusted networks and limits exposure.",
-      how: ["Issue accounts to remote staff; restrict access by user/group."],
-      category: "vpn",
-      impact: 3,
-      effort: "Low"
-    });
+    steps.push({ id: "vpn", title: "Provide secure remote access (VPN/ZTNA)", why: "Encrypts traffic on untrusted networks and limits exposure.", how: ["Issue accounts to remote staff; restrict access by user/group."], category: "vpn", impact: 3, effort: "Low" });
   }
-
   if (a.mdm === "No" && manyUsers) {
     risk += 1;
-    steps.push({
-      id: "mdm",
-      title: "Set up device management (MDM)",
-      why: "Keeps devices patched, enforces disk encryption, allows remote wipe.",
-      how: ["Enroll corporate devices; enforce screen lock, updates and encryption."],
-      category: "mdm",
-      impact: 3,
-      effort: "Medium"
-    });
+    steps.push({ id: "mdm", title: "Set up device management (MDM)", why: "Keeps devices patched, enforces disk encryption, allows remote wipe.", how: ["Enroll corporate devices; enforce screen lock, updates and encryption."], category: "mdm", impact: 3, effort: "Medium" });
   }
 
   const effortRank = { Low: 0, Medium: 1, High: 2 };
@@ -180,7 +113,7 @@ function computePlan(a) {
   return { score, steps: steps.slice(0, 5) };
 }
 
-// ---------- page (chat) ----------
+// ---------- page (single-question chat) ----------
 export default function ChatLike() {
   const [subId, setSubId] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -227,19 +160,33 @@ export default function ChatLike() {
         setShowPlan(true);
         if (typeof window !== "undefined") window.dataLayer?.push?.({ event: "view_plan" });
       }
-    }, 400);
+    }, 350);
   }
 
-  useEffect(() => { if (msgs.length === 1) pushBot(QUESTIONS[0].label); }, []); // first question
+  // Back: go to previous question and remove last two chat bubbles (user answer + next question)
+  function goBack() {
+    setTyping(false);
+    if (showPlan) {
+      setShowPlan(false);
+      setMsgs(m => (m.length ? m.slice(0, -1) : m));
+      setCurrentQ(QUESTIONS.length - 1);
+      return;
+    }
+    if (currentQ === 0) return;
+    const prevIndex = currentQ - 1;
+    const keyToClear = QUESTIONS[currentQ].key;
+    setAnswers(prev => { const cp = { ...prev }; delete cp[keyToClear]; return cp; });
+    setCurrentQ(prevIndex);
+    setMsgs(m => (m.length >= 2 ? m.slice(0, -2) : m));
+  }
+
+  useEffect(() => { if (msgs.length === 1) pushBot(QUESTIONS[0].label); }, []);
 
   return (
     <div className="gpt">
       {/* header */}
       <header className="header">
-        <div className="brand">
-          <div className="logo">SC</div>
-          <div className="title">SMB Security Copilot</div>
-        </div>
+        <div className="brand"><div className="logo">SC</div><div className="title">SMB Security Copilot</div></div>
         <div className="disclosure">We may earn a commission from recommended tools.</div>
       </header>
 
@@ -253,10 +200,7 @@ export default function ChatLike() {
             </div>
           ))}
           {typing && (
-            <div className="message bot">
-              <div className="avatar">🤖</div>
-              <div className="bubble typing">typing…</div>
-            </div>
+            <div className="message bot"><div className="avatar">🤖</div><div className="bubble typing">typing…</div></div>
           )}
 
           {showPlan && plan && (
@@ -264,34 +208,18 @@ export default function ChatLike() {
               <div className="avatar">🤖</div>
               <div className="bubble">
                 <div className="plan">
-                  <div className="plan-head">
-                    <div className="plan-title">Prioritized Security Plan</div>
-                    <div className="score">Score: {plan.score}/100</div>
-                  </div>
-
+                  <div className="plan-head"><div className="plan-title">Prioritized Security Plan</div><div className="score">Score: {plan.score}/100</div></div>
                   <ol className="steps">
                     {plan.steps.map((s, i) => (
                       <li key={s.id} className="step">
-                        <div className="step-head">
-                          <div className="step-title">{i + 1}. {s.title}</div>
-                          <div className="impact">{"★".repeat(s.impact)}</div>
-                        </div>
+                        <div className="step-head"><div className="step-title">{i + 1}. {s.title}</div><div className="impact">{"★".repeat(s.impact)}</div></div>
                         <div className="why">Why: {s.why}</div>
-                        <ul className="how">
-                          {s.how.map((h, idx) => <li key={idx}>{h}</li>)}
-                        </ul>
-
+                        <ul className="how">{s.how.map((h, idx) => <li key={idx}>{h}</li>)}</ul>
                         {s.category && (
                           <div className="vendors">
                             {(AFFILIATE[s.category] || []).map(opt => (
-                              <a
-                                key={opt.name}
-                                className="vendor"
-                                href={withSubId(opt.url, subId)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => { if (typeof window !== "undefined") window.dataLayer?.push?.({ event: "affiliate_click", category: s.category, vendor: opt.name }); }}
-                              >
+                              <a key={opt.name} className="vendor" href={withSubId(opt.url, subId)} target="_blank" rel="noopener noreferrer"
+                                 onClick={() => { if (typeof window !== "undefined") window.dataLayer?.push?.({ event: "affiliate_click", category: s.category, vendor: opt.name }); }}>
                                 <div className="v-name">{opt.name}</div>
                                 <div className="v-blurb">{opt.blurb}</div>
                                 <div className="tag">{opt.affiliate ? "Affiliate" : "External"} →</div>
@@ -302,34 +230,23 @@ export default function ChatLike() {
                       </li>
                     ))}
                   </ol>
-
-                  <div className="tiny">
-                    Disclaimer: General guidance only; tailor to your environment.
-                  </div>
+                  <div className="tiny">Disclaimer: General guidance only; tailor to your environment.</div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* composer */}
+        {/* composer (single question + auto-advance) */}
         {!showPlan && (
           <div className="composer">
             <div className="row">
-              <select
-                className="select"
-                value={answers[QUESTIONS[currentQ].key] || ""}
-                onChange={(e) => onAnswer(e.target.value)}
-              >
+              <button className="back" onClick={goBack} disabled={currentQ === 0}>Back</button>
+              <div className="progress">{currentQ + 1} / {QUESTIONS.length}</div>
+              <select className="select" value={answers[QUESTIONS[currentQ].key] || ""} onChange={(e) => onAnswer(e.target.value)}>
                 <option value="" disabled>{QUESTIONS[currentQ].label}</option>
                 {QUESTIONS[currentQ].options.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
-              <button
-                className="send"
-                onClick={() => { if (typeof window !== "undefined") window.dataLayer?.push?.({ event: "start_audit" }); }}
-              >
-                Next
-              </button>
             </div>
             <div className="hint">We don’t store your answers. They stay in your browser.</div>
           </div>
@@ -338,22 +255,17 @@ export default function ChatLike() {
 
       <footer className="foot">© {new Date().getFullYear()} SMB Security Copilot · Affiliate disclosure.</footer>
 
-      {/* -------- global styles (ChatGPT-like) -------- */}
+      {/* -------- styles -------- */}
       <style jsx global>{`
-        :root{
-          --bg:#343541; --panel:#444654; --fg:#ececf1; --muted:#aeb0b4; --accent:#10a37f; --border:rgba(255,255,255,0.08);
-          --max: 820px;
-        }
-        *{box-sizing:border-box}
-        html,body,#__next{height:100%}
-        body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial;}
+        :root{ --bg:#343541; --panel:#444654; --fg:#ececf1; --muted:#aeb0b4; --accent:#10a37f; --border:rgba(255,255,255,0.08); --max: 820px; }
+        *{box-sizing:border-box} html,body,#__next{height:100%} body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
         a{color:inherit;text-decoration:none}
-        .gpt .header{max-width:var(--max);margin:0 auto;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
+        .header{max-width:var(--max);margin:0 auto;padding:14px 16px;display:flex;justify-content:space-between;align-items:center}
         .brand{display:flex;align-items:center;gap:10px}
         .logo{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#19c37d,#10a37f);display:flex;align-items:center;justify-content:center;font-weight:800;color:#0b0c0d}
         .title{font-weight:600}
         .disclosure{font-size:12px;color:var(--muted)}
-        .main{max-width:var(--max);margin:0 auto;padding:0 12px 80px}
+        .main{max-width:var(--max);margin:0 auto;padding:0 12px 90px}
         .chat{background:transparent;border:1px solid var(--border);border-radius:14px;overflow:hidden}
         .message{display:flex;gap:12px;padding:16px;border-bottom:1px solid var(--border)}
         .message:last-child{border-bottom:0}
@@ -364,10 +276,11 @@ export default function ChatLike() {
         .typing{opacity:.8;animation:pulse 1.2s infinite}
         @keyframes pulse{0%{opacity:.6}50%{opacity:1}100%{opacity:.6}}
         .composer{position:sticky;bottom:12px;margin-top:12px}
-        .row{display:flex;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:10px 10px}
+        .row{display:flex;gap:8px;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:10px 10px;align-items:center}
+        .back{background:transparent;border:1px solid var(--border);color:var(--fg);border-radius:8px;padding:8px 10px;cursor:pointer}
+        .back:disabled{opacity:.4;cursor:not-allowed}
+        .progress{font-size:12px;color:var(--muted);padding:0 8px}
         .select{flex:1;background:transparent;color:var(--fg);border:0;outline:none}
-        .send{background:var(--accent);color:#0b0c0d;border:0;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer}
-        .send:hover{filter:brightness(1.05)}
         .hint{margin-top:6px;font-size:12px;color:var(--muted);text-align:center}
         .plan{display:block}
         .plan-head{display:flex;align-items:center;justify-content:space-between}
