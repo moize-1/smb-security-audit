@@ -14,7 +14,7 @@ import React, { useMemo, useState, useEffect } from "react";
 // -------------------------------
 // Affiliate Catalog (replace URLs)
 // -------------------------------
-const AFFILIATE = { name: string; url: string; blurb: string; affiliate?: boolean }[]> = {
+const AFFILIATE =
   passwordManager: [
     {
       name: "1Password Business",
